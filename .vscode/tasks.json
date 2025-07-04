@@ -1,0 +1,16 @@
+{
+	"version": "2.0.0",
+	"tasks": [
+		{
+			"label": "Deploy to Google Apps Script",
+			"type": "shell",
+			"command": "echo",
+			"args": [
+				"Google Apps Script project ready for deployment. Copy Code.js, Utils.js, Setup.js contents to Google Apps Script editor at https://script.google.com/"
+			],
+			"group": "build",
+			"isBackground": false,
+			"problemMatcher": []
+		}
+	]
+}
