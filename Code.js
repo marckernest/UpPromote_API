@@ -59,36 +59,80 @@ function getOrCreateSpreadsheet() {
 }
 
 /**
- * Make API request to UpPromote
+ * Make API request to UpPromote with pagination support
  */
 function makeApiRequest(endpoint, params = {}) {
-  const url = CONFIG.API_BASE_URL + endpoint;
-  const queryString = Object.keys(params).length > 0 
-    ? '?' + Object.keys(params).map(key => `${key}=${encodeURIComponent(params[key])}`).join('&')
-    : '';
+  const allData = [];
+  let page = 1;
+  let hasMoreData = true;
   
-  const options = {
-    method: 'GET',
-    headers: {
-      'Authorization': `Bearer ${CONFIG.API_KEY}`,
-      'Content-Type': 'application/json',
-      'Accept': 'application/json'
-    }
-  };
-  
-  try {
-    const response = UrlFetchApp.fetch(url + queryString, options);
-    const responseCode = response.getResponseCode();
+  while (hasMoreData) {
+    const url = CONFIG.API_BASE_URL + endpoint;
     
-    if (responseCode !== 200) {
-      throw new Error(`API request failed with status ${responseCode}: ${response.getContentText()}`);
-    }
+    // Add pagination parameters
+    const paginationParams = {
+      ...params,
+      limit: 100, // Maximum allowed per request
+      page: page
+    };
     
-    return JSON.parse(response.getContentText());
-  } catch (error) {
-    Logger.log(`API request error for ${endpoint}: ${error.toString()}`);
-    throw error;
+    const queryString = Object.keys(paginationParams).length > 0 
+      ? '?' + Object.keys(paginationParams).map(key => `${key}=${encodeURIComponent(paginationParams[key])}`).join('&')
+      : '';
+    
+    const options = {
+      method: 'GET',
+      headers: {
+        'Authorization': `Bearer ${CONFIG.API_KEY}`,
+        'Content-Type': 'application/json',
+        'Accept': 'application/json'
+      }
+    };
+    
+    try {
+      Logger.log(`Fetching page ${page} from ${endpoint}...`);
+      
+      const response = UrlFetchApp.fetch(url + queryString, options);
+      const responseCode = response.getResponseCode();
+      
+      if (responseCode !== 200) {
+        throw new Error(`API request failed with status ${responseCode}: ${response.getContentText()}`);
+      }
+      
+      const responseData = JSON.parse(response.getContentText());
+      
+      // Add current page data to all data
+      if (responseData.data && responseData.data.length > 0) {
+        allData.push(...responseData.data);
+        Logger.log(`Page ${page}: Retrieved ${responseData.data.length} records`);
+        
+        // Check if there are more pages
+        if (responseData.meta) {
+          hasMoreData = responseData.meta.current_page < responseData.meta.last_page;
+        } else if (responseData.links && responseData.links.next) {
+          hasMoreData = true;
+        } else {
+          hasMoreData = responseData.data.length === 100; // If we got max records, there might be more
+        }
+        
+        page++;
+        
+        // Add a small delay between requests to be respectful to the API
+        if (hasMoreData) {
+          Utilities.sleep(500); // 0.5 second delay between pages
+        }
+      } else {
+        hasMoreData = false;
+      }
+      
+    } catch (error) {
+      Logger.log(`API request error for ${endpoint} (page ${page}): ${error.toString()}`);
+      throw error;
+    }
   }
+  
+  Logger.log(`Total records retrieved from ${endpoint}: ${allData.length}`);
+  return { data: allData };
 }
 
 /**

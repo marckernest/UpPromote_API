@@ -33,56 +33,98 @@ class ApiClient {
   }
   
   makeRequest(endpoint, params = {}, retryCount = 0) {
-    const url = this.baseUrl + endpoint;
-    const queryString = Object.keys(params).length > 0 
-      ? '?' + Object.keys(params).map(key => `${key}=${encodeURIComponent(params[key])}`).join('&')
-      : '';
+    const allData = [];
+    let page = 1;
+    let hasMoreData = true;
     
-    const options = {
-      method: 'GET',
-      headers: {
-        'Authorization': `Bearer ${this.apiKey}`,
-        'Content-Type': 'application/json',
-        'Accept': 'application/json'
-      }
-    };
-    
-    try {
-      // Add delay to respect rate limits
-      if (this.requestCount > 0) {
-        Utilities.sleep(1000); // 1 second delay between requests
-      }
+    while (hasMoreData) {
+      const url = this.baseUrl + endpoint;
       
-      const response = UrlFetchApp.fetch(url + queryString, options);
-      const responseCode = response.getResponseCode();
-      this.requestCount++;
+      // Add pagination parameters
+      const paginationParams = {
+        ...params,
+        limit: 100, // Maximum allowed per request
+        page: page
+      };
       
-      if (responseCode === 429) { // Rate limited
-        if (retryCount < this.maxRetries) {
-          const delay = Math.pow(2, retryCount) * 1000; // Exponential backoff
-          Logger.log(`Rate limited, retrying in ${delay}ms...`);
-          Utilities.sleep(delay);
-          return this.makeRequest(endpoint, params, retryCount + 1);
-        } else {
-          throw new Error('Rate limit exceeded, max retries reached');
+      const queryString = Object.keys(paginationParams).length > 0 
+        ? '?' + Object.keys(paginationParams).map(key => `${key}=${encodeURIComponent(paginationParams[key])}`).join('&')
+        : '';
+      
+      const options = {
+        method: 'GET',
+        headers: {
+          'Authorization': `Bearer ${this.apiKey}`,
+          'Content-Type': 'application/json',
+          'Accept': 'application/json'
         }
-      }
+      };
       
-      if (responseCode !== 200) {
-        throw new Error(`API request failed with status ${responseCode}: ${response.getContentText()}`);
+      try {
+        // Add delay to respect rate limits
+        if (this.requestCount > 0) {
+          Utilities.sleep(1000); // 1 second delay between requests
+        }
+        
+        const response = UrlFetchApp.fetch(url + queryString, options);
+        const responseCode = response.getResponseCode();
+        this.requestCount++;
+        
+        if (responseCode === 429) { // Rate limited
+          if (retryCount < this.maxRetries) {
+            const delay = Math.pow(2, retryCount) * 1000; // Exponential backoff
+            Logger.log(`Rate limited, retrying in ${delay}ms...`);
+            Utilities.sleep(delay);
+            return this.makeRequest(endpoint, params, retryCount + 1);
+          } else {
+            throw new Error('Rate limit exceeded, max retries reached');
+          }
+        }
+        
+        if (responseCode !== 200) {
+          throw new Error(`API request failed with status ${responseCode}: ${response.getContentText()}`);
+        }
+        
+        const responseData = JSON.parse(response.getContentText());
+        
+        // Add current page data to all data
+        if (responseData.data && responseData.data.length > 0) {
+          allData.push(...responseData.data);
+          Logger.log(`Page ${page}: Retrieved ${responseData.data.length} records from ${endpoint}`);
+          
+          // Check if there are more pages
+          if (responseData.meta) {
+            hasMoreData = responseData.meta.current_page < responseData.meta.last_page;
+          } else if (responseData.links && responseData.links.next) {
+            hasMoreData = true;
+          } else {
+            hasMoreData = responseData.data.length === 100; // If we got max records, there might be more
+          }
+          
+          page++;
+          
+          // Add a small delay between pages
+          if (hasMoreData) {
+            Utilities.sleep(500); // 0.5 second delay between pages
+          }
+        } else {
+          hasMoreData = false;
+        }
+        
+      } catch (error) {
+        if (retryCount < this.maxRetries && error.toString().includes('timeout')) {
+          Logger.log(`Request timeout, retrying... (${retryCount + 1}/${this.maxRetries})`);
+          Utilities.sleep(2000);
+          return this.makeRequest(endpoint, params, retryCount + 1);
+        }
+        
+        Logger.log(`API request error for ${endpoint} (page ${page}): ${error.toString()}`);
+        throw error;
       }
-      
-      return JSON.parse(response.getContentText());
-    } catch (error) {
-      if (retryCount < this.maxRetries && error.toString().includes('timeout')) {
-        Logger.log(`Request timeout, retrying... (${retryCount + 1}/${this.maxRetries})`);
-        Utilities.sleep(2000);
-        return this.makeRequest(endpoint, params, retryCount + 1);
-      }
-      
-      Logger.log(`API request error for ${endpoint}: ${error.toString()}`);
-      throw error;
     }
+    
+    Logger.log(`Total records retrieved from ${endpoint}: ${allData.length}`);
+    return { data: allData };
   }
 }
 
@@ -190,8 +232,7 @@ class SheetManager {
       ['Data Type', 'Count'],
       ['Affiliates', data.affiliates || 0],
       ['Referrals', data.referrals || 0],
-      ['Coupons', data.coupons || 0],
-      ['Payments', data.payments || 0]
+      ['Coupons', data.coupons || 0]
     ];
     
     summarySheet.getRange(1, 1, summaryData.length, 2).setValues(summaryData);
