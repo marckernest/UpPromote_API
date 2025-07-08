@@ -7,12 +7,13 @@
 const CONFIG = {
   API_BASE_URL: 'https://aff-api.uppromote.com/api/v1',
   API_KEY: '', // Add your API key here
-  SHEET_NAME: 'UpPromote Data',
+  SHEET_NAME: 'UpPromoter_Data',
   ENDPOINTS: {
     AFFILIATES: '/affiliates',
     REFERRALS: '/referrals',
-    COUPONS: '/coupons',
-    PAYMENTS: '/payments'
+    COUPONS: '/coupons'
+    // Note: /payments endpoint doesn't exist in UpPromote API
+    // Payment data can be found in referrals with status 'paid'
   }
 };
 
@@ -33,7 +34,6 @@ function pullUpPromoteData() {
     pullAffiliatesData(spreadsheet);
     pullReferralsData(spreadsheet);
     pullCouponsData(spreadsheet);
-    pullPaymentsData(spreadsheet);
     
     Logger.log('Data pull completed successfully');
     
@@ -102,15 +102,35 @@ function pullAffiliatesData(spreadsheet) {
     const sheet = getOrCreateSheet(spreadsheet, 'Affiliates');
     
     if (data && data.data && data.data.length > 0) {
-      const headers = ['ID', 'Email', 'Name', 'Status', 'Commission Rate', 'Created At', 'Updated At'];
+      const headers = [
+        'ID', 'Email', 'First Name', 'Last Name', 'Status', 'Email Verified',
+        'Company', 'Address', 'Country', 'City', 'State', 'Zipcode', 'Phone',
+        'Facebook', 'YouTube', 'Instagram', 'Twitter', 'Affiliate Link',
+        'Program ID', 'Program Name', 'Created At'
+      ];
+      
       const rows = data.data.map(affiliate => [
         affiliate.id || '',
         affiliate.email || '',
-        affiliate.name || '',
-        affiliate.status || '',
-        affiliate.commission_rate || '',
-        affiliate.created_at || '',
-        affiliate.updated_at || ''
+        affiliate.first_name || '',
+        affiliate.last_name || '',
+        affiliate.status === 1 ? 'Active' : 'Inactive',
+        affiliate.email_verified === 1 ? 'Verified' : 'Not Verified',
+        affiliate.company || '',
+        affiliate.address || '',
+        affiliate.country || '',
+        affiliate.city || '',
+        affiliate.state || '',
+        affiliate.zipcode || '',
+        affiliate.phone || '',
+        affiliate.facebook || '',
+        affiliate.youtube || '',
+        affiliate.instagram || '',
+        affiliate.twitter || '',
+        affiliate.affiliate_link || '',
+        affiliate.program_id || '',
+        affiliate.program_name || '',
+        affiliate.created_at_timestamp ? new Date(affiliate.created_at_timestamp * 1000).toLocaleString() : ''
       ]);
       
       writeDataToSheet(sheet, headers, rows);
@@ -134,15 +154,31 @@ function pullReferralsData(spreadsheet) {
     const sheet = getOrCreateSheet(spreadsheet, 'Referrals');
     
     if (data && data.data && data.data.length > 0) {
-      const headers = ['ID', 'Affiliate ID', 'Customer Email', 'Order Value', 'Commission', 'Status', 'Created At'];
+      const headers = [
+        'ID', 'Order ID', 'Order Number', 'Affiliate ID', 'Customer ID', 
+        'Quantity', 'Total Sales', 'Commission', 'Commission Adjustment',
+        'Status', 'Commission Type', 'Commission Amount', 'Refund ID',
+        'Tracking Type', 'Affiliate Email', 'Affiliate Name', 'Created At'
+      ];
+      
       const rows = data.data.map(referral => [
         referral.id || '',
+        referral.order_id || '',
+        referral.order_number || '',
         referral.affiliate_id || '',
-        referral.customer_email || '',
-        referral.order_value || '',
+        referral.customer_id || '',
+        referral.quantity || '',
+        referral.total_sales || '',
         referral.commission || '',
+        referral.commission_adjustment || '',
         referral.status || '',
-        referral.created_at || ''
+        referral.commission_type || '',
+        referral.commission_amount || '',
+        referral.refund_id || '',
+        referral.tracking_type || '',
+        referral.affiliate ? referral.affiliate.email : '',
+        referral.affiliate ? `${referral.affiliate.first_name} ${referral.affiliate.last_name}` : '',
+        referral.created_at ? new Date(referral.created_at * 1000).toLocaleString() : ''
       ]);
       
       writeDataToSheet(sheet, headers, rows);
@@ -166,15 +202,14 @@ function pullCouponsData(spreadsheet) {
     const sheet = getOrCreateSheet(spreadsheet, 'Coupons');
     
     if (data && data.data && data.data.length > 0) {
-      const headers = ['ID', 'Code', 'Affiliate ID', 'Discount Type', 'Discount Value', 'Status', 'Created At'];
+      const headers = ['ID', 'Affiliate ID', 'Coupon Code', 'Description', 'Created At'];
+      
       const rows = data.data.map(coupon => [
         coupon.id || '',
-        coupon.code || '',
         coupon.affiliate_id || '',
-        coupon.discount_type || '',
-        coupon.discount_value || '',
-        coupon.status || '',
-        coupon.created_at || ''
+        coupon.coupon || '',
+        coupon.description || '',
+        coupon.created_timestamp ? new Date(coupon.created_timestamp * 1000).toLocaleString() : ''
       ]);
       
       writeDataToSheet(sheet, headers, rows);
@@ -184,38 +219,6 @@ function pullCouponsData(spreadsheet) {
     }
   } catch (error) {
     Logger.log('Error pulling coupons data: ' + error.toString());
-  }
-}
-
-/**
- * Pull payments data
- */
-function pullPaymentsData(spreadsheet) {
-  Logger.log('Pulling payments data...');
-  
-  try {
-    const data = makeApiRequest(CONFIG.ENDPOINTS.PAYMENTS);
-    const sheet = getOrCreateSheet(spreadsheet, 'Payments');
-    
-    if (data && data.data && data.data.length > 0) {
-      const headers = ['ID', 'Affiliate ID', 'Amount', 'Currency', 'Status', 'Payment Method', 'Created At'];
-      const rows = data.data.map(payment => [
-        payment.id || '',
-        payment.affiliate_id || '',
-        payment.amount || '',
-        payment.currency || '',
-        payment.status || '',
-        payment.payment_method || '',
-        payment.created_at || ''
-      ]);
-      
-      writeDataToSheet(sheet, headers, rows);
-      Logger.log(`Successfully pulled ${rows.length} payments`);
-    } else {
-      Logger.log('No payments data found');
-    }
-  } catch (error) {
-    Logger.log('Error pulling payments data: ' + error.toString());
   }
 }
 

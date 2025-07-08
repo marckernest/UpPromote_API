@@ -12,10 +12,11 @@ A Google Apps Script project that pulls affiliate data from the UpPromote platfo
 
 ## API Endpoints Supported
 
-- **Affiliates**: Pull affiliate partner information
-- **Referrals**: Track referral transactions and commissions
-- **Coupons**: Monitor coupon usage and performance
-- **Payments**: View payment history and status
+- **Affiliates**: Pull comprehensive affiliate partner information including contact details, social media links, and program data
+- **Referrals**: Track referral transactions, commissions, and payment status (includes payment data for paid referrals)
+- **Coupons**: Monitor coupon codes assigned to affiliates and their usage
+
+*Note: The UpPromote API doesn't have a separate payments endpoint. Payment information is available in the referrals data when the status is 'paid'.*
 
 ## Setup Instructions
 
@@ -46,12 +47,11 @@ A Google Apps Script project that pulls affiliate data from the UpPromote platfo
 
 ### 4. Set Up Google Sheets
 
-The script will automatically create a new Google Sheet or use the currently active one. Each data type will be organized into separate sheets:
+The script will automatically create a new Google Sheet named "UpPromoter_Data" or use the currently active one. Each data type will be organized into separate sheets:
 
-- **Affiliates**: Partner information and commission rates
-- **Referrals**: Transaction data and referral tracking
-- **Coupons**: Coupon codes and usage statistics
-- **Payments**: Payment history and status
+- **Affiliates**: Comprehensive partner information including contact details, social media links, program data, and status
+- **Referrals**: Complete transaction data including order details, commission calculations, and payment status  
+- **Coupons**: Coupon codes assigned to affiliates with descriptions and creation dates
 
 ## Usage
 
@@ -94,13 +94,13 @@ You can customize the script behavior by modifying the `CONFIG` object:
 const CONFIG = {
   API_BASE_URL: 'https://aff-api.uppromote.com/api/v1',
   API_KEY: 'your-api-key-here',
-  SHEET_NAME: 'UpPromote Data', // Name for new spreadsheets
+  SHEET_NAME: 'UpPromoter_Data', // Name for new spreadsheets
   ENDPOINTS: {
     // API endpoints to pull data from
     AFFILIATES: '/affiliates',
     REFERRALS: '/referrals',
-    COUPONS: '/coupons',
-    PAYMENTS: '/payments'
+    COUPONS: '/coupons'
+    // Note: /payments endpoint doesn't exist - payment data is in referrals
   }
 };
 ```
