@@ -6,7 +6,6 @@
 // Configuration
 const CONFIG = {
   API_BASE_URL: 'https://aff-api.uppromote.com/api/v1',
-  API_KEY: '', // Add your API key here
   SHEET_NAME: 'UpPromoter_Data',
   ENDPOINTS: {
     AFFILIATES: '/affiliates',
@@ -22,10 +21,7 @@ const CONFIG = {
  */
 function pullUpPromoteData() {
   try {
-    // Check if API key is configured
-    if (!CONFIG.API_KEY) {
-      throw new Error('API key not configured. Please set your API key in the CONFIG object.');
-    }
+    getApiKeyOrThrow();
     
     // Get or create the spreadsheet
     const spreadsheet = getOrCreateSpreadsheet();
@@ -54,8 +50,17 @@ function getOrCreateSpreadsheet() {
   
   // Create new spreadsheet if none is active
   const newSpreadsheet = SpreadsheetApp.create(CONFIG.SHEET_NAME);
-  Logger.log('Created new spreadsheet: ' + newSpreadsheet.getUrl());
+  Logger.log('Created new spreadsheet for UpPromote data pulls');
   return newSpreadsheet;
+}
+
+function getApiKeyOrThrow() {
+  const apiKey = PropertiesService.getScriptProperties().getProperty(UPPROMOTE_API_KEY_PROPERTY);
+  if (!apiKey) {
+    throw new Error('API key not configured. Run setupScript() or store UPPROMOTE_API_KEY in Script Properties.');
+  }
+
+  return apiKey;
 }
 
 /**
@@ -65,6 +70,7 @@ function makeApiRequest(endpoint, params = {}) {
   const allData = [];
   let page = 1;
   let hasMoreData = true;
+  const apiKey = getApiKeyOrThrow();
   
   while (hasMoreData) {
     const url = CONFIG.API_BASE_URL + endpoint;
@@ -82,8 +88,9 @@ function makeApiRequest(endpoint, params = {}) {
     
     const options = {
       method: 'GET',
+      muteHttpExceptions: true,
       headers: {
-        'Authorization': `Bearer ${CONFIG.API_KEY}`,
+        'Authorization': `Bearer ${apiKey}`,
         'Content-Type': 'application/json',
         'Accept': 'application/json'
       }
@@ -96,7 +103,7 @@ function makeApiRequest(endpoint, params = {}) {
       const responseCode = response.getResponseCode();
       
       if (responseCode !== 200) {
-        throw new Error(`API request failed with status ${responseCode}: ${response.getContentText()}`);
+        throw new Error(`API request to ${endpoint} failed with status ${responseCode}`);
       }
       
       const responseData = JSON.parse(response.getContentText());
@@ -281,6 +288,8 @@ function getOrCreateSheet(spreadsheet, sheetName) {
  * Write data to sheet with headers
  */
 function writeDataToSheet(sheet, headers, rows) {
+  const sanitizedRows = sanitizeSheetRows(rows);
+
   // Clear existing content
   sheet.clear();
   
@@ -289,8 +298,8 @@ function writeDataToSheet(sheet, headers, rows) {
   sheet.getRange(1, 1, 1, headers.length).setFontWeight('bold');
   
   // Write data if available
-  if (rows.length > 0) {
-    sheet.getRange(2, 1, rows.length, headers.length).setValues(rows);
+  if (sanitizedRows.length > 0) {
+    sheet.getRange(2, 1, sanitizedRows.length, headers.length).setValues(sanitizedRows);
   }
   
   // Auto-resize columns
@@ -337,15 +346,10 @@ function removeTriggers() {
  * Test API connection
  */
 function testApiConnection() {
-  if (!CONFIG.API_KEY) {
-    Logger.log('Error: API key not configured');
-    return false;
-  }
-  
   try {
     const data = makeApiRequest(CONFIG.ENDPOINTS.AFFILIATES, { limit: 1 });
     Logger.log('API connection successful');
-    Logger.log('Response: ' + JSON.stringify(data));
+    Logger.log('Test response received with data length: ' + (data.data ? data.data.length : 0));
     return true;
   } catch (error) {
     Logger.log('API connection failed: ' + error.toString());

@@ -28,22 +28,21 @@ A Google Apps Script project that pulls affiliate data from the UpPromote platfo
 
 ### 2. Configure the Script
 
-1. Open the `Code.js` file
-2. Replace the empty `API_KEY` value in the `CONFIG` object with your actual API key:
+1. Open the Apps Script editor and add all project files: `Code.js`, `Utils.js`, `Setup.js`, and `appsscript.json`
+2. Store your API key in Script Properties instead of source code:
    ```javascript
-   const CONFIG = {
-     API_KEY: 'your-api-key-here', // Replace with your actual API key
-     // ... other settings
-   };
+   PropertiesService.getScriptProperties().setProperty('UPPROMOTE_API_KEY', 'your-api-key-here');
    ```
+3. Or run `setupScript()` to enter the API key through the setup prompt
 
 ### 3. Deploy to Google Apps Script
 
 1. Go to [Google Apps Script](https://script.google.com/)
 2. Create a new project
 3. Replace the default code with the contents of `Code.js`
-4. Copy the `appsscript.json` configuration
-5. Save the project
+4. Add the contents of `Utils.js` and `Setup.js`
+5. Copy the `appsscript.json` configuration
+6. Save the project
 
 ### 4. Set Up Google Sheets
 
@@ -93,7 +92,6 @@ You can customize the script behavior by modifying the `CONFIG` object:
 ```javascript
 const CONFIG = {
   API_BASE_URL: 'https://aff-api.uppromote.com/api/v1',
-  API_KEY: 'your-api-key-here',
   SHEET_NAME: 'UpPromoter_Data', // Name for new spreadsheets
   ENDPOINTS: {
     // API endpoints to pull data from
@@ -135,7 +133,7 @@ For production use, consider these security improvements:
 ### Common Issues
 
 1. **"API key not configured" Error**
-   - Ensure you've added your API key to the CONFIG object
+   - Ensure `UPPROMOTE_API_KEY` is set in Script Properties or run `setupScript()`
    - Verify the API key is correct and active
 
 2. **"API request failed" Error**
