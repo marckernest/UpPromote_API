@@ -55,7 +55,7 @@ function getOrCreateSpreadsheet() {
 }
 
 function getApiKeyOrThrow() {
-  const apiKey = PropertiesService.getScriptProperties().getProperty(UPPROMOTE_API_KEY_PROPERTY);
+  const apiKey = ApiKeyManager.getApiKey();
   if (!apiKey) {
     throw new Error('API key not configured. Run setupScript() or store UPPROMOTE_API_KEY in Script Properties.');
   }
@@ -348,8 +348,9 @@ function removeTriggers() {
 function testApiConnection() {
   try {
     const data = makeApiRequest(CONFIG.ENDPOINTS.AFFILIATES, { limit: 1 });
+    const dataLength = Array.isArray(data && data.data) ? data.data.length : 0;
     Logger.log('API connection successful');
-    Logger.log('Test response received with data length: ' + (data.data ? data.data.length : 0));
+    Logger.log('Test response received with data length: ' + dataLength);
     return true;
   } catch (error) {
     Logger.log('API connection failed: ' + error.toString());

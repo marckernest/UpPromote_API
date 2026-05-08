@@ -300,11 +300,23 @@ class ErrorReporter {
       return value;
     }
 
-    const sensitiveKeys = ['apikey', 'api_key', 'authorization', 'token', 'secret', 'password', 'response', 'content'];
+    const sensitiveKeys = new Set([
+      'apikey',
+      'api_key',
+      'authorization',
+      'token',
+      'secret',
+      'password',
+      'response',
+      'responsebody',
+      'response_body',
+      'contenttext',
+      'content_text'
+    ]);
 
     return Object.keys(value).reduce((redacted, key) => {
       const normalizedKey = key.toLowerCase();
-      redacted[key] = sensitiveKeys.some(sensitiveKey => normalizedKey.includes(sensitiveKey))
+      redacted[key] = sensitiveKeys.has(normalizedKey)
         ? '[REDACTED]'
         : ErrorReporter.redactSensitiveData(value[key]);
       return redacted;
