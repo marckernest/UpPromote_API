@@ -50,7 +50,7 @@ function getOrCreateSpreadsheet() {
   
   // Create new spreadsheet if none is active
   const newSpreadsheet = SpreadsheetApp.create(CONFIG.SHEET_NAME);
-  Logger.log('Created new spreadsheet for UpPromote data pulls');
+  Logger.log('Created new spreadsheet: ' + newSpreadsheet.getName());
   return newSpreadsheet;
 }
 
@@ -102,8 +102,8 @@ function makeApiRequest(endpoint, params = {}) {
       const response = UrlFetchApp.fetch(url + queryString, options);
       const responseCode = response.getResponseCode();
       
-      if (responseCode !== 200) {
-        throw new Error(`API request to ${endpoint} failed with status ${responseCode}`);
+      if (responseCode < 200 || responseCode >= 300) {
+        throw buildApiRequestError(endpoint, response);
       }
       
       const responseData = JSON.parse(response.getContentText());
@@ -350,7 +350,7 @@ function testApiConnection() {
     const data = makeApiRequest(CONFIG.ENDPOINTS.AFFILIATES, { limit: 1 });
     const dataLength = Array.isArray(data && data.data) ? data.data.length : 0;
     Logger.log('API connection successful');
-    Logger.log('Test response received with data length: ' + dataLength);
+    Logger.log('Test response received with affiliate count: ' + dataLength);
     return true;
   } catch (error) {
     Logger.log('API connection failed: ' + error.toString());

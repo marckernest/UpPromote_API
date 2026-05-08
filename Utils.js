@@ -28,6 +28,21 @@ function sanitizeSheetRows(rows) {
   return rows.map(row => row.map(sanitizeSheetValue));
 }
 
+function buildApiRequestError(endpoint, response) {
+  const responseCode = response.getResponseCode();
+  let apiErrorCode = '';
+
+  try {
+    const responseBody = JSON.parse(response.getContentText());
+    apiErrorCode = responseBody && (responseBody.error_code || responseBody.code || '');
+  } catch (error) {
+    apiErrorCode = '';
+  }
+
+  const errorSuffix = apiErrorCode ? ` (${apiErrorCode})` : '';
+  return new Error(`API request to ${endpoint} failed with status ${responseCode}${errorSuffix}`);
+}
+
 /**
  * Secure API key management using PropertiesService
  */
@@ -108,8 +123,8 @@ class ApiClient {
           }
         }
         
-        if (responseCode !== 200) {
-          throw new Error(`API request to ${endpoint} failed with status ${responseCode}`);
+        if (responseCode < 200 || responseCode >= 300) {
+          throw buildApiRequestError(endpoint, response);
         }
         
         const responseData = JSON.parse(response.getContentText());
