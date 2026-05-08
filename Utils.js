@@ -2,21 +2,62 @@
  * Enhanced utility functions for UpPromote API integration
  */
 
+const UPPROMOTE_API_KEY_PROPERTY = 'UPPROMOTE_API_KEY';
+const SHEET_FORMULA_PREFIX_PATTERN = /^[=+\-@]/;
+
+function sanitizeSheetValue(value) {
+  if (value === null || value === undefined) {
+    return '';
+  }
+
+  if (typeof value !== 'string') {
+    return value;
+  }
+
+  const normalizedValue = value.replace(/[\r\n\t]/g, ' ').trim();
+  if (!normalizedValue) {
+    return '';
+  }
+
+  return SHEET_FORMULA_PREFIX_PATTERN.test(normalizedValue)
+    ? `'${normalizedValue}`
+    : normalizedValue;
+}
+
+function sanitizeSheetRows(rows) {
+  return rows.map(row => row.map(sanitizeSheetValue));
+}
+
+function buildApiRequestError(endpoint, response) {
+  const responseCode = response.getResponseCode();
+  let apiErrorCode = '';
+
+  try {
+    const responseBody = JSON.parse(response.getContentText());
+    apiErrorCode = responseBody && (responseBody.error_code || responseBody.code || '');
+  } catch (error) {
+    apiErrorCode = '';
+  }
+
+  const errorSuffix = apiErrorCode ? ` (${apiErrorCode})` : '';
+  return new Error(`API request to ${endpoint} failed with status ${responseCode}${errorSuffix}`);
+}
+
 /**
  * Secure API key management using PropertiesService
  */
 class ApiKeyManager {
   static setApiKey(apiKey) {
-    PropertiesService.getScriptProperties().setProperty('UPPROMOTE_API_KEY', apiKey);
+    PropertiesService.getScriptProperties().setProperty(UPPROMOTE_API_KEY_PROPERTY, apiKey);
     Logger.log('API key stored securely');
   }
   
   static getApiKey() {
-    return PropertiesService.getScriptProperties().getProperty('UPPROMOTE_API_KEY');
+    return PropertiesService.getScriptProperties().getProperty(UPPROMOTE_API_KEY_PROPERTY);
   }
   
   static clearApiKey() {
-    PropertiesService.getScriptProperties().deleteProperty('UPPROMOTE_API_KEY');
+    PropertiesService.getScriptProperties().deleteProperty(UPPROMOTE_API_KEY_PROPERTY);
     Logger.log('API key cleared');
   }
 }
@@ -53,6 +94,7 @@ class ApiClient {
       
       const options = {
         method: 'GET',
+        muteHttpExceptions: true,
         headers: {
           'Authorization': `Bearer ${this.apiKey}`,
           'Content-Type': 'application/json',
@@ -81,8 +123,8 @@ class ApiClient {
           }
         }
         
-        if (responseCode !== 200) {
-          throw new Error(`API request failed with status ${responseCode}: ${response.getContentText()}`);
+        if (responseCode < 200 || responseCode >= 300) {
+          throw buildApiRequestError(endpoint, response);
         }
         
         const responseData = JSON.parse(response.getContentText());
@@ -159,8 +201,7 @@ class DataFormatter {
   }
   
   static sanitizeString(str) {
-    if (!str) return '';
-    return str.toString().replace(/[\r\n\t]/g, ' ').trim();
+    return sanitizeSheetValue(str);
   }
 }
 
@@ -191,6 +232,8 @@ class SheetManager {
   }
   
   writeDataWithFormatting(sheet, headers, rows) {
+    const sanitizedRows = sanitizeSheetRows(rows);
+
     // Clear existing content
     sheet.clear();
     
@@ -202,12 +245,12 @@ class SheetManager {
     headerRange.setFontColor('#ffffff');
     
     // Write data if available
-    if (rows.length > 0) {
-      const dataRange = sheet.getRange(2, 1, rows.length, headers.length);
-      dataRange.setValues(rows);
+    if (sanitizedRows.length > 0) {
+      const dataRange = sheet.getRange(2, 1, sanitizedRows.length, headers.length);
+      dataRange.setValues(sanitizedRows);
       
       // Apply alternating row colors using banding for better performance
-      const banding = sheet.getRange(1, 1, rows.length + 1, headers.length).setBanding(SpreadsheetApp.BandingTheme.LIGHT_GREY);
+      const banding = sheet.getRange(1, 1, sanitizedRows.length + 1, headers.length).setBanding(SpreadsheetApp.BandingTheme.LIGHT_GREY);
       banding.setHeaderRowColor('#4285f4');
       banding.setHeaderRowFontColor('#ffffff');
       banding.setFirstRowColor('#ffffff');
@@ -254,13 +297,45 @@ class ErrorReporter {
       context: context,
       error: error.toString(),
       stack: error.stack || 'No stack trace available',
-      additionalInfo: additionalInfo
+      additionalInfo: ErrorReporter.redactSensitiveData(additionalInfo)
     };
     
     Logger.log('ERROR: ' + JSON.stringify(errorLog, null, 2));
     
     // Optional: Send error to external monitoring service
     // this.sendToMonitoring(errorLog);
+  }
+
+  static redactSensitiveData(value) {
+    if (Array.isArray(value)) {
+      return value.map(item => ErrorReporter.redactSensitiveData(item));
+    }
+
+    if (!value || typeof value !== 'object') {
+      return value;
+    }
+
+    const sensitiveKeys = new Set([
+      'apikey',
+      'api_key',
+      'authorization',
+      'token',
+      'secret',
+      'password',
+      'response',
+      'responsebody',
+      'response_body',
+      'contenttext',
+      'content_text'
+    ]);
+
+    return Object.keys(value).reduce((redacted, key) => {
+      const normalizedKey = key.toLowerCase();
+      redacted[key] = sensitiveKeys.has(normalizedKey)
+        ? '[REDACTED]'
+        : ErrorReporter.redactSensitiveData(value[key]);
+      return redacted;
+    }, {});
   }
   
   static sendToMonitoring(errorLog) {
